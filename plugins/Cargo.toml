@@ -1,0 +1,19 @@
+[package]
+name = "plugins"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "time"
+path = "src/time.rs"
+
+[[bin]]
+name = "course"
+path = "src/course/main.rs"
+
+[dependencies]
+timetable = { path = "../timetable" }
+chrono = "0.4.24"
+walkdir = "2.3.2"
+serde = { name = "1.0.156", features = ["derive"] }
+serde_yaml = "0.9.19"

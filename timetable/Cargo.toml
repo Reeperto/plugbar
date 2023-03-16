@@ -1,0 +1,16 @@
+[package]
+name = "timetable"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "timetable"
+path = "src/lib.rs"
+
+[[bin]]
+name = "event"
+path = "src/bin/event.rs"
+
+[dependencies]
+chrono = { name = "0.4.24", features = ["serde"] }
+serde = "1.0.156"
