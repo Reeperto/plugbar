@@ -1,12 +1,12 @@
 use std::ops::Add;
 
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug)]
 pub struct DateRange {
-    pub start: NaiveDateTime,
-    pub end: NaiveDateTime,
+    pub start: DateTime<Local>,
+    pub end: DateTime<Local>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -34,12 +34,12 @@ impl Add<Duration> for DateRange {
 }
 
 impl DateRange {
-    pub fn new(start: NaiveDateTime, end: NaiveDateTime) -> Self {
+    pub fn new(start: DateTime<Local>, end: DateTime<Local>) -> Self {
         Self { start, end }
     }
 
-    pub fn in_range(&self, time: &NaiveDateTime) -> bool {
-        if (self.start.timestamp()..=self.end.timestamp()).contains(&time.timestamp()) {
+    pub fn in_range(&self, time: &DateTime<Local>) -> bool {
+        if time >= &self.start && time <= &self.end {
             true
         } else {
             false
@@ -55,15 +55,24 @@ impl RecurringDate {
         let mut week: Vec<DateRange> = vec![];
 
         for day in &self.days {
-            let date =
+            let naive_date =
                 NaiveDate::from_isoywd_opt(now.year(), now.iso_week().week() + offset, *day)?;
-            let time_start = NaiveTime::from_hms_opt(self.start.hour, self.start.minute, 0)?;
-            let time_end = NaiveTime::from_hms_opt(self.end.hour, self.end.minute, 0)?;
 
-            week.push(DateRange::new(
-                NaiveDateTime::new(date, time_start),
-                NaiveDateTime::new(date, time_end),
-            ));
+            let naive_start = NaiveDateTime::new(
+                naive_date,
+                NaiveTime::from_hms_opt(self.start.hour, self.start.minute, 0)?,
+            );
+            let naive_end = NaiveDateTime::new(
+                naive_date,
+                NaiveTime::from_hms_opt(self.end.hour, self.end.minute, 0)?,
+            );
+
+            let offset = *Local::now().offset();
+
+            let start: DateTime<Local> = DateTime::<Local>::from_local(naive_start, offset);
+            let end: DateTime<Local> = DateTime::<Local>::from_local(naive_end, offset);
+
+            week.push(DateRange::new(start, end))
         }
 
         Some(week)

@@ -16,7 +16,7 @@ fn main() {
 
     let ranges = events.week_to_ranges(0).unwrap();
 
-    let time = Local::now().naive_local();
+    let time = Local::now();
 
     if let Some(r) = ranges.iter().find(|r| r.in_range(&time)) {
         println!("Time found in range {r:?}")

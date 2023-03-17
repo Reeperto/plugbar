@@ -11,19 +11,11 @@ pub struct Course {
     pub slot: RecurringDate,
 }
 
-#[allow(dead_code)]
-pub fn closest_course(courses: &Vec<Course>) -> Option<(&Course, Duration)> {
+// Obtains the nearest course in the schedule and the time to the class
+pub fn get_nearest_coure(courses: &Vec<Course>) -> Option<(&Course, Duration)> {
     let now = Local::now();
-    let now_epoch = now.timestamp();
 
-    // Steps to find nearest course
-    // 1. Associate every course with the next 2 weeks of date ranges
-    // 2. Check if currently in class. If so return class. Else:
-    // 3. Convert all to unix epoch form based on their start time
-    // 4. Take min of unix epochs
-    // 5. Return class that is nearest alongside duration to it.
-
-    let ranges: Vec<(&Course, Vec<DateRange>)> = courses
+    let courses_and_ranges: Vec<(&Course, Vec<DateRange>)> = courses
         .iter()
         .map(|c| {
             // Obtain current week ranges and next week ranges
@@ -34,40 +26,35 @@ pub fn closest_course(courses: &Vec<Course>) -> Option<(&Course, Duration)> {
         })
         .collect();
 
-    for (course, rs) in &ranges {
-        for r in rs {
-            if r.in_range(&now.naive_local()) {
-                return Some((course, Duration::seconds(0)));
-            }
+    let mut course_and_durations: Vec<(&Course, Duration)> = vec![];
+
+    for (course, ranges) in courses_and_ranges {
+        // Check if currently in a class and return if so
+        if ranges.iter().any(|r| r.in_range(&now)) {
+            return Some((course, Duration::seconds(0)));
         }
+
+        // Get the minimum duration between now and when the course next occurs
+        let min_duration = ranges
+            .iter()
+            .filter_map(|r| {
+                let dt = r.start - now;
+
+                if dt.le(&Duration::seconds(0)) {
+                    None
+                } else {
+                    Some(dt)
+                }
+            })
+            .min()?;
+
+        course_and_durations.push((course, min_duration));
     }
 
-    let epochs: Vec<(&Course, i64)> = ranges
-        .iter()
-        .map(|(c, rs)| {
-            (
-                *c,
-                rs.iter()
-                    .map(|r| {
-                        let start = r.start.timestamp();
-
-                        if r.end.timestamp() < now_epoch {
-                            i64::MAX
-                        } else {
-                            start
-                        }
-                    })
-                    .min()
-                    .unwrap(),
-            )
-        })
-        .collect();
-    
-    if let Some(e) = epochs.iter().min_by(|(_, t1), (_, t2)| t1.cmp(t2)) {
-        return Some((e.0, Duration::seconds(e.1 - now_epoch)));
-    } else {
-        return None
-    }
+    // Get the course with the smallest duration and return
+    return course_and_durations
+        .into_iter()
+        .min_by(|x, y| x.1.cmp(&y.1));
 }
 
 pub fn find_course_descriptors(search_dir: PathBuf) -> Option<Vec<PathBuf>> {
@@ -90,7 +77,9 @@ pub fn find_course_descriptors(search_dir: PathBuf) -> Option<Vec<PathBuf>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::course::get_nearest_coure;
     use chrono::Weekday;
+    use std::time::Instant;
     use timetable::time::{RecurringDate, Time};
 
     use super::Course;
@@ -148,5 +137,61 @@ mod tests {
         let out = serde_yaml::to_string(&course).unwrap();
 
         assert_eq!(out, yaml)
+    }
+
+    #[test]
+    fn test_class_lookup() {
+        let now = Instant::now();
+        // Takes only ~30ms to do 1000 lookups on 3 classes!
+        // Testing shows this is not memory bottle-necked too much.
+        // Only about 2mb of memory is used... still crazy for how
+        // small all the structures are though.
+        for _ in 0..1_000 {
+            let classes = vec![
+                Course {
+                    name: String::from("MATH 13"),
+                    slot: RecurringDate {
+                        days: vec![Weekday::Mon, Weekday::Wed, Weekday::Fri],
+                        start: Time { hour: 8, minute: 0 },
+                        end: Time {
+                            hour: 8,
+                            minute: 50,
+                        },
+                    },
+                },
+                Course {
+                    name: String::from("MATH 9"),
+                    slot: RecurringDate {
+                        days: vec![Weekday::Mon, Weekday::Wed, Weekday::Fri],
+                        start: Time {
+                            hour: 13,
+                            minute: 0,
+                        },
+                        end: Time {
+                            hour: 13,
+                            minute: 50,
+                        },
+                    },
+                },
+                Course {
+                    name: String::from("COMLIT 10"),
+                    slot: RecurringDate {
+                        days: vec![Weekday::Tue, Weekday::Thu],
+                        start: Time {
+                            hour: 11,
+                            minute: 0,
+                        },
+                        end: Time {
+                            hour: 12,
+                            minute: 20,
+                        },
+                    },
+                },
+            ];
+
+            let _ = get_nearest_coure(&classes).unwrap();
+        }
+        println!("{}", now.elapsed().as_millis());
+        assert!(now.elapsed().as_millis() < 500)
     }
 }
